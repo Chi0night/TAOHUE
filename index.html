@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Color Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@200;300;400;500;900&display=swap" rel="stylesheet">
+<style>
+* {
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+font-family: 'Kanit', sans-serif;
+}
+body {
+width: 100vw;
+height: 100vh;
+overflow: hidden;
+position: relative;
+}
+#mainContainer {
+width: 100%;
+height: calc(100% - 60px);
+position: relative;
+overflow: hidden;
+}
+#videoElement, #imageElement {
+width: 100%;
+height: 100%;
+object-fit: contain;
+background-color: #000;
+}
+#colorPopup {
+position: fixed;
+top: 20px;
+left: 50%;
+transform: translateX(-50%);
+background: rgba(255, 255, 255, 0.95);
+padding: 15px 20px;
+border-radius: 15px;
+box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+display: none;
+z-index: 100;
+min-width: 200px;
+}
+.color-bar {
+width: 100%;
+height: 30px;
+border-radius: 8px;margin: 8px 0;
+}
+.color-info {
+display: flex;
+flex-direction: column;
+gap: 5px;
+}
+#colorHistory {
+position: fixed;
+bottom: 60px;
+left: 0;
+right: 0;
+background: white;
+padding: 20px;
+border-radius: 20px 20px 0 0;
+box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+display: none;
+z-index: 90;
+}
+.history-container {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+margin-top: 10px;
+}
+.history-item {
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 5px;
+}
+.color-circle {
+width: 50px;
+height: 50px;
+border-radius: 50%;
+border: 2px solid #eee;
+cursor: pointer;
+}
+.color-label {
+font-size: 12px;
+text-align: center;
+}
+#colorBlindSimulator {
+position: fixed;
+bottom: 60px;
+left: 0;
+right: 0;background: white;
+padding: 20px;
+border-radius: 20px 20px 0 0;
+box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+display: none;
+transition: transform 0.3s ease-in-out;
+z-index: 95;
+}
+.simulator-header {
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin-bottom: 15px;
+}
+.toggle-simulator {
+background: none;
+border: none;
+font-size: 20px;
+cursor: pointer;
+padding: 5px;
+}
+.simulator-content {
+max-height: 200px;
+overflow: hidden;
+transition: max-height 0.3s ease-in-out;
+}
+.simulator-container {
+display: flex;
+justify-content: space-around;
+margin-top: 10px;
+}
+.simulation {
+text-align: center;
+width: 30%;
+}
+.simulation canvas {
+width: 100%;
+border-radius: 8px;
+border: 1px solid #eee;
+}
+.simulation h4 {
+margin: 5px 0;
+font-size: 14px;
+}
+#navbar {
+position: fixed;bottom: 0;
+left: 0;
+right: 0;
+height: 60px;
+background: white;
+display: flex;
+justify-content: space-around;
+align-items: center;
+box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+z-index: 100;
+}
+.nav-button {
+padding: 10px 20px;
+border: none;
+background: none;
+cursor: pointer;
+}
+#captureBtn {
+position: absolute;
+bottom: 70px;
+left: 50%;
+transform: translateX(-50%);
+padding: 10px 20px;
+background: white;
+border: none;
+border-radius: 20px;
+box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+display: none;
+z-index: 100;
+}
+.collapsed .simulator-content {
+max-height: 0;
+}
+.collapsed .toggle-simulator {
+transform: rotate(180deg);
+}
+</style>
+</head>
+<body>
+<div id="mainContainer">
+<video id="videoElement" autoplay playsinline style="display: none;"></video>
+<img id="imageElement" style="display: none;">
+</div>
+<div id="colorPopup">
+<div class="color-bar"></div>
+<div class="color-info"></div>
+</div>
+<div id="colorHistory">
+<h3>ประวัติสีล่าสุด</h3>
+<div class="history-container"></div>
+</div>
+<div id="colorBlindSimulator">
+<div class="simulator-header">
+<h3>Color Blindness Simulator</h3>
+<button class="toggle-simulator">▼</button>
+</div>
+<div class="simulator-content">
+<div class="simulator-container">
+<div class="simulation">
+<h4>Protanopia</h4>
+<canvas id="protanopia"></canvas>
+</div>
+<div class="simulation">
+<h4>Deuteranopia</h4>
+<canvas id="deuteranopia"></canvas>
+</div>
+<div class="simulation">
+<h4>Tritanopia</h4>
+<canvas id="tritanopia"></canvas>
+</div>
+</div>
+</div>
+</div>
+<button id="captureBtn">Capture</button>
+<nav id="navbar">
+<button class="nav-button" id="uploadBtn"> 📁</button>
+<button class="nav-button" id="cameraBtn"> 📷</button>
+<button class="nav-button" id="historyBtn"> 📚</button>
+</nav>
+<input type="file" id="fileInput" accept="image/*" style="display: none;">
+<script>
+const colors = [
+{ name: "ดำ", rgb: [0, 0, 0] },
+            { name: "ขาว", rgb: [255, 255, 255] },
+            { name: "ขาว", rgb: [255, 250, 250] },
+            { name: "ขาว", rgb: [255, 250, 240] },
+            { name: "ขาว", rgb: [255, 255, 240] },
+            { name: "ขาว", rgb: [248, 248, 255] },
+            { name: "ขาว", rgb: [245, 245, 245] },
+            { name: "ขาว", rgb: [255, 245, 238] },
+            { name: "ขาว", rgb: [245, 245, 220] },
+            { name: "ขาว", rgb: [250, 235, 215] },
+            { name: "ขาว", rgb: [250, 240, 230] },
+            { name: "ขาว", rgb: [253, 245, 230] },
+            { name: "ขาว", rgb: [255, 248, 220] },
+            { name: "ขาว", rgb: [255, 240, 245] },
+            { name: "ขาว", rgb: [245, 255, 250] },
+            { name: "ขาว", rgb: [228, 229, 231] },
+            { name: "เทา", rgb: [128, 128, 128] },
+            { name: "แดง", rgb: [255, 0, 0] },
+            { name: "แดง", rgb: [255, 69, 0] },
+            { name: "แดง", rgb: [139, 0, 0] },
+            { name: "แดง", rgb: [220, 20, 60] },
+            { name: "แดง", rgb: [178, 34, 34] },
+            { name: "แดง", rgb: [240, 128, 128] },
+            { name: "แดง", rgb: [205, 92, 92] },
+            { name: "แดง", rgb: [255, 99, 71] },
+            { name: "แดง", rgb: [250, 128, 114] },
+            { name: "แดง", rgb: [255, 160, 122] },
+            { name: "แดง", rgb: [255, 96, 0] },
+            { name: "แดง", rgb: [255, 77, 77] },
+            { name: "แดง", rgb: [227, 66, 52] },
+            { name: "แดง", rgb: [114, 47, 55] },
+            { name: "แดง", rgb: [128, 0, 32] },
+            { name: "แดง", rgb: [222, 49, 99] },
+            { name: "แดง", rgb: [224, 17, 95] },
+            { name: "แดง", rgb: [227, 11, 93] },
+            { name: "แดง", rgb: [156, 102, 31] },
+            { name: "แดง", rgb: [183, 65, 14] },
+            { name: "แดง", rgb: [115, 54, 53] },
+            { name: "เขียว", rgb: [0, 255, 0] },
+            { name: "เขียว", rgb: [50, 205, 50] },
+            { name: "เขียว", rgb: [124, 252, 0] },
+            { name: "เขียว", rgb: [127, 255, 0] },
+            { name: "เขียว", rgb: [34, 139, 34] },
+            { name: "เขียว", rgb: [0, 100, 0] },
+            { name: "เขียว", rgb: [173, 223, 173] },
+            { name: "เขียว", rgb: [107, 142, 35] },
+            { name: "เขียว", rgb: [85, 107, 47] },
+            { name: "เขียว", rgb: [80, 200, 120] },
+            { name: "เขียว", rgb: [144, 238, 144] },
+            { name: "เขียว", rgb: [152, 255, 152] },
+            { name: "เขียว", rgb: [119, 221, 119] },
+            { name: "เขียว", rgb: [208, 240, 192] },
+            { name: "เขียว", rgb: [141, 182, 0] },
+            { name: "เขียว", rgb: [127, 255, 212] },
+            { name: "เขียว", rgb: [0, 168, 107] },
+            { name: "เขียว", rgb: [188, 184, 138] },
+            { name: "เขียว", rgb: [152, 251, 152] },
+            { name: "เขียว", rgb: [127, 255, 0] },
+            { name: "เขียว", rgb: [128, 128, 0] },
+            { name: "เขียว", rgb: [154, 205, 50] },
+            { name: "เขียว", rgb: [0, 255, 127] },
+            { name: "เขียว", rgb: [86, 130, 3] },
+            { name: "เขียว", rgb: [76, 187, 23] },
+            { name: "เขียว", rgb: [0, 123, 91] },
+            { name: "เขียว", rgb: [1, 50, 32] },
+            { name: "เขียว", rgb: [0, 255, 170] },
+            { name: "น้ำเงิน", rgb: [0, 0, 255] },
+            { name: "น้ำเงิน", rgb: [0, 127, 255] },
+            { name: "น้ำเงิน", rgb: [65, 105, 225] },
+            { name: "น้ำเงิน", rgb: [135, 206, 235] },
+            { name: "น้ำเงิน", rgb: [135, 206, 250] },
+            { name: "น้ำเงิน", rgb: [0, 0, 139] },
+            { name: "น้ำเงิน", rgb: [0, 0, 128] },
+            { name: "น้ำเงิน", rgb: [25, 25, 112] },
+            { name: "น้ำเงิน", rgb: [18, 10, 143] },
+            { name: "น้ำเงิน", rgb: [75, 0, 130] },
+            { name: "น้ำเงิน", rgb: [0, 255, 255] },
+            { name: "น้ำเงิน", rgb: [64, 224, 208] },
+            { name: "น้ำเงิน", rgb: [0, 128, 128] },
+            { name: "น้ำเงิน", rgb: [127, 255, 212] },
+            { name: "น้ำเงิน", rgb: [175, 238, 238] },
+            { name: "น้ำเงิน", rgb: [138, 43, 226] },
+            { name: "น้ำเงิน", rgb: [204, 204, 255] },
+            { name: "น้ำเงิน", rgb: [54, 33, 89] },
+            { name: "น้ำเงิน", rgb: [204, 204, 255] },
+            { name: "น้ำเงิน", rgb: [75, 0, 130] },
+            { name: "น้ำเงิน", rgb: [106, 90, 205] },
+            { name: "น้ำเงิน", rgb: [70, 130, 180] },
+            { name: "น้ำเงิน", rgb: [176, 196, 222] },
+            { name: "น้ำเงิน", rgb: [240, 255, 255] },
+            { name: "น้ำเงิน", rgb: [140, 190, 214] },
+            { name: "เหลือง", rgb: [255, 255, 0] },
+            { name: "เหลือง", rgb: [255, 239, 0] },
+            { name: "เหลือง", rgb: [255, 250, 205] },
+            { name: "เหลือง", rgb: [127, 255, 0] },
+            { name: "เหลือง", rgb: [255, 241, 159] },
+            { name: "เหลือง", rgb: [255, 255, 224] },
+            { name: "เหลือง", rgb: [255, 253, 208] },
+            { name: "เหลือง", rgb: [253, 253, 150] },
+            { name: "เหลือง", rgb: [250, 250, 210] },
+            { name: "เหลือง", rgb: [240, 223, 154] },
+            { name: "เหลือง", rgb: [255, 215, 0] },
+            { name: "เหลือง", rgb: [255, 223, 0] },
+            { name: "เหลือง", rgb: [255, 219, 88] },
+            { name: "เหลือง", rgb: [255, 191, 0] },
+            { name: "เหลือง", rgb: [184, 134, 11] },
+            { name: "เหลือง", rgb: [255, 204, 0] },
+            { name: "เหลือง", rgb: [255, 229, 180] },
+            { name: "เหลือง", rgb: [244, 164, 96] },
+            { name: "เหลือง", rgb: [234, 162, 33] },
+            { name: "เหลือง", rgb: [204, 119, 34] },
+            { name: "เหลือง", rgb: [204, 255, 0] },
+            { name: "เหลือง", rgb: [154, 205, 50] },
+            { name: "เหลือง", rgb: [173, 255, 47] },
+            { name: "เหลือง", rgb: [228, 255, 122] },
+            { name: "เหลือง", rgb: [201, 204, 65] },
+            { name: "เหลือง", rgb: [255, 245, 105] },
+            { name: "เหลือง", rgb: [255, 255, 102] },
+            { name: "เหลือง", rgb: [255, 247, 0] },
+            { name: "เหลือง", rgb: [244, 164, 96] },
+            { name: "เหลือง", rgb: [255, 226, 89] },
+            { name: "ฟ้า", rgb: [0, 255, 255] },
+            { name: "ฟ้า", rgb: [135, 206, 235] },
+            { name: "ฟ้า", rgb: [0, 191, 255] },
+            { name: "ฟ้า", rgb: [135, 206, 250] },
+            { name: "ฟ้า", rgb: [174, 198, 207] },
+            { name: "ฟ้า", rgb: [70, 130, 180] },
+            { name: "ฟ้า", rgb: [112, 128, 144] },
+            { name: "ฟ้า", rgb: [30, 144, 255] },
+            { name: "ฟ้า", rgb: [75, 0, 130] },
+            { name: "ฟ้า", rgb: [106, 90, 205] },
+            { name: "ฟ้า", rgb: [127, 255, 212] },
+            { name: "ฟ้า", rgb: [64, 224, 208] },
+            { name: "ฟ้า", rgb: [0, 128, 128] },
+            { name: "ฟ้า", rgb: [175, 238, 238] },
+            { name: "ฟ้า", rgb: [138, 43, 226] },
+            { name: "ฟ้า", rgb: [204, 204, 255] },
+            { name: "ฟ้า", rgb: [100, 149, 237] },
+            { name: "ฟ้า", rgb: [204, 204, 255] },
+            { name: "ฟ้า", rgb: [111, 0, 255] },
+            { name: "ฟ้า", rgb: [173, 216, 230] },
+            { name: "ฟ้า", rgb: [176, 224, 230] },
+            { name: "ฟ้า", rgb: [176, 196, 222] },
+            { name: "ฟ้า", rgb: [240, 248, 255] },
+            { name: "ฟ้า", rgb: [175, 238, 238] },
+            { name: "ฟ้า", rgb: [30, 144, 255] },
+            { name: "ฟ้า", rgb: [42, 82, 190] },
+            { name: "ฟ้า", rgb: [46, 139, 187] },
+            { name: "ฟ้า", rgb: [240, 255, 255] },
+            { name: "ฟ้า", rgb: [0, 51, 102] },
+            { name: "ม่วง", rgb: [128, 0, 128] },
+            { name: "ม่วง", rgb: [191, 64, 191] },
+            { name: "ม่วง", rgb: [153, 102, 204] },
+            { name: "ม่วง", rgb: [238, 130, 238] },
+            { name: "ม่วง", rgb: [200, 162, 200] },
+            { name: "ม่วง", rgb: [48, 25, 52] },
+            { name: "ม่วง", rgb: [90, 79, 207] },
+            { name: "ม่วง", rgb: [97, 64, 81] },
+            { name: "ม่วง", rgb: [128, 0, 32] },
+            { name: "ม่วง", rgb: [75, 0, 130] },
+            { name: "ม่วง", rgb: [230, 230, 250] },
+            { name: "ม่วง", rgb: [207, 159, 255] },
+            { name: "ม่วง", rgb: [218, 112, 214] },
+            { name: "ม่วง", rgb: [216, 191, 216] },
+            { name: "ม่วง", rgb: [224, 176, 255] },
+            { name: "ม่วง", rgb: [255, 0, 255] },
+            { name: "ม่วง", rgb: [255, 20, 147] },
+            { name: "ม่วง", rgb: [204, 0, 204] },
+            { name: "ม่วง", rgb: [135, 38, 87] },
+            { name: "ม่วง", rgb: [142, 69, 133] },
+            { name: "ม่วง", rgb: [138, 43, 226] },
+            { name: "ม่วง", rgb: [204, 204, 255] },
+            { name: "ม่วง", rgb: [111, 0, 255 ]},
+            { name: "ม่วง", rgb: [201, 160, 220] },
+            { name: "ม่วง", rgb: [223, 115, 255] },
+            { name: "ม่วง", rgb: [183, 132, 167] },
+            { name: "ม่วง", rgb: [195, 172, 199] },
+            { name: "ม่วง", rgb: [145, 92, 131] },
+            { name: "ม่วง", rgb: [75, 0, 130] },
+            { name: "ม่วง", rgb: [139, 133, 137] },
+            { name: "ส้ม", rgb: [255, 165, 0] },
+            { name: "ส้ม", rgb: [255, 140, 0] },
+            { name: "ส้ม", rgb: [227, 66, 52] },
+            { name: "ส้ม", rgb: [255, 128, 0] },
+            { name: "ส้ม", rgb: [255, 163, 67] },
+            { name: "ส้ม", rgb: [255, 200, 124] },
+            { name: "ส้ม", rgb: [255, 204, 153] },
+            { name: "ส้ม", rgb: [255, 239, 213] },
+            { name: "ส้ม", rgb: [255, 218, 185] },
+            { name: "ส้ม", rgb: [251, 206, 177] },
+            { name: "ส้ม", rgb: [255, 140, 0] },
+            { name: "ส้ม", rgb: [183, 65, 14] },
+            { name: "ส้ม", rgb: [184, 115, 51] },
+            { name: "ส้ม", rgb: [204, 85, 0] },
+            { name: "ส้ม", rgb: [191, 87, 0] },
+            { name: "ส้ม", rgb: [234, 162, 33] },
+            { name: "ส้ม", rgb: [237, 145, 33] },
+            { name: "ส้ม", rgb: [226, 114, 91] },
+            { name: "ส้ม", rgb: [255, 145, 164] },
+            { name: "ส้ม", rgb: [255, 99, 71] },
+            { name: "ส้ม", rgb: [255, 191, 0] },
+            { name: "ส้ม", rgb: [255, 204, 51] },
+            { name: "ส้ม", rgb: [253, 188, 180] },
+            { name: "ส้ม", rgb: [255, 173, 96] },
+            { name: "ส้ม", rgb: [255, 195, 77] },
+            { name: "ส้ม", rgb: [210, 105, 30] },
+            { name: "ส้ม", rgb: [244, 164, 96] },
+            { name: "ส้ม", rgb: [255, 69, 0] },
+            { name: "ส้ม", rgb: [226, 88, 34] },
+            { name: "ส้ม", rgb: [193, 154, 107] },
+            { name: "ชมพู", rgb: [255, 192, 203] },
+            { name: "ชมพู", rgb: [255, 105, 180] },
+            { name: "ชมพู", rgb: [255, 0, 255] },
+            { name: "ชมพู", rgb: [227, 11, 93] },
+            { name: "ชมพู", rgb: [255, 182, 193] },
+            { name: "ชมพู", rgb: [255, 209, 220] },
+            { name: "ชมพู", rgb: [255, 204, 187] },
+            { name: "ชมพู", rgb: [251, 174, 210] },
+            { name: "ชมพู", rgb: [244, 194, 194] },
+            { name: "ชมพู", rgb: [255, 20, 147] },
+            { name: "ชมพู", rgb: [199, 21, 133] },
+            { name: "ชมพู", rgb: [128, 0, 64] },
+            { name: "ชมพู", rgb: [255, 102, 204] },
+            { name: "ชมพู", rgb: [255, 183, 197] },
+            { name: "ชมพู", rgb: [255, 166, 201] },
+            { name: "ชมพู", rgb: [255, 145, 164] },
+            { name: "ชมพู", rgb: [248, 131, 121] },
+            { name: "ชมพู", rgb: [255, 104, 116] },
+            { name: "ชมพู", rgb: [255, 56, 96] },
+            { name: "ชมพู", rgb: [218, 112, 214] },
+            { name: "ชมพู", rgb: [255, 240, 245] },
+            { name: "ชมพู", rgb: [221, 160, 221] },
+            { name: "ชมพู", rgb: [204, 153, 204] },
+            { name: "ชมพู", rgb: [216, 191, 216] },
+            { name: "ชมพู", rgb: [255, 183, 197] },
+            { name: "ชมพู", rgb: [255, 165, 162] },
+            { name: "ชมพู", rgb: [240, 128, 128] },
+            { name: "ชมพู", rgb: [255, 204, 194] },
+            { name: "ชมพู", rgb: [205, 92, 92] },
+            { name: "ชมพู", rgb: [252, 15, 192] },
+            { name: "ชมพู", rgb: [228, 0, 124] },
+            { name: "ชมพู", rgb: [253, 193, 204] },
+            { name: "ชมพู", rgb: [255, 224, 225] },
+            { name: "ชมพู", rgb: [205, 175, 149] },
+            { name: "น้ำตาล", rgb: [139, 69, 19] },
+            { name: "น้ำตาล", rgb: [181, 101, 29] },
+            { name: "น้ำตาล", rgb: [210, 180, 140] },
+            { name: "น้ำตาล", rgb: [183, 65, 14] },
+            { name: "น้ำตาล", rgb: [153, 101, 21] },
+            { name: "น้ำตาล", rgb: [101, 67, 33] },
+            { name: "น้ำตาล", rgb: [123, 63, 0 ] },
+            { name: "น้ำตาล", rgb: [111, 78, 55] },
+            { name: "น้ำตาล", rgb: [60, 40, 15] },
+            { name: "น้ำตาล", rgb: [108, 56, 35] },
+            { name: "น้ำตาล", rgb: [245, 245, 220] },
+            { name: "น้ำตาล", rgb: [255, 228, 196] },
+            { name: "น้ำตาล", rgb: [204, 102, 0] },
+            { name: "น้ำตาล", rgb: [150, 113, 23] },
+            { name: "น้ำตาล", rgb: [194, 178, 128] },
+            { name: "น้ำตาล", rgb: [165, 42, 42] },
+            { name: "น้ำตาล", rgb: [192, 64, 0] },
+            { name: "น้ำตาล", rgb: [184, 115, 51] },
+            { name: "น้ำตาล", rgb: [128, 128, 0] },
+            { name: "น้ำตาล", rgb: [107, 142, 35] },
+            { name: "น้ำตาล", rgb: [103, 68, 43] },
+            { name: "น้ำตาล", rgb: [128, 128, 0] },
+            { name: "น้ำตาล", rgb: [138, 109, 77] },
+            { name: "น้ำตาล", rgb: [153, 101, 21] },
+            { name: "น้ำตาล", rgb: [203, 153, 68] },
+            { name: "น้ำตาล", rgb: [204, 153, 102] },
+            { name: "น้ำตาล", rgb: [255, 191, 0] },
+            { name: "น้ำตาล", rgb: [218, 165, 32] },
+            { name: "น้ำตาล", rgb: [128, 105, 77] },
+            { name: "น้ำตาล", rgb: [169, 149, 114] },
+            { name: "น้ำตาล", rgb: [132, 109, 78] },
+            { name: "น้ำตาล", rgb: [183, 65, 14] },
+            { name: "น้ำตาล", rgb: [131, 97, 82] },
+            { name: "ทอง", rgb: [255, 215, 0] }
+];const colorHistory = [];
+const maxHistoryItems = 10;
+const video = document.getElementById('videoElement');
+const imageElement = document.getElementById('imageElement');
+const colorPopup = document.getElementById('colorPopup');
+const simulator = document.getElementById('colorBlindSimulator');
+const captureBtn = document.getElementById('captureBtn');
+const fileInput = document.getElementById('fileInput');
+const colorHistoryElement = document.getElementById('colorHistory');
+// Toggle simulator
+document.querySelector('.toggle-simulator').addEventListener('click', () => {
+simulator.classList.toggle('collapsed');
+});
+// Camera initialization
+document.getElementById('cameraBtn').addEventListener('click', async () => {
+try {
+const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+video.srcObject = stream;
+video.style.display = 'block';
+imageElement.style.display = 'none';
+captureBtn.style.display = 'block';
+colorHistoryElement.style.display = 'none';
+} catch (err) {
+console.error('Error accessing camera:', err);
+}
+});
+// File upload handling
+document.getElementById('uploadBtn').addEventListener('click', () => {
+fileInput.click();
+});
+fileInput.addEventListener('change', (e) => {
+const file = e.target.files[0];
+if (file) {
+const reader = new FileReader();
+reader.onload = (e) => {
+imageElement.src = e.target.result;
+video.style.display = 'none';
+imageElement.style.display = 'block';
+captureBtn.style.display = 'none';
+colorHistoryElement.style.display = 'none';
+};
+reader.readAsDataURL(file);
+}
+});
+function addToHistory(r, g, b, colorName) {
+const colorInfo = {
+r, g, b,
+name: colorName,hex: rgbToHex(r, g, b)
+};
+// Add to front of array and maintain max length
+colorHistory.unshift(colorInfo);
+if (colorHistory.length > maxHistoryItems) {
+colorHistory.pop();
+}
+updateHistoryDisplay();
+}
+function updateHistoryDisplay() {
+const container = document.querySelector('.history-container');
+container.innerHTML = '';
+colorHistory.forEach(color => {
+const item = document.createElement('div');
+item.className = 'history-item';
+const circle = document.createElement('div');
+circle.className = 'color-circle';
+circle.style.backgroundColor = `rgb(${color.r}, ${color.g}, ${color.b})`;
+circle.addEventListener('click', () => {
+showColorInfo(color.r, color.g, color.b);
+});
+const label = document.createElement('div');
+label.className = 'color-label';
+label.textContent = color.name;
+item.appendChild(circle);
+item.appendChild(label);
+container.appendChild(item);
+});
+}
+// Color detection
+function getColorName(r, g, b) {
+let minDistance = Infinity;
+let closestColor = colors[0];
+colors.forEach(color => {
+const distance = Math.sqrt(
+Math.pow(color.rgb[0] - r, 2) +
+Math.pow(color.rgb[1] - g, 2) +
+Math.pow(color.rgb[2] - b, 2)
+);
+if (distance < minDistance) {
+minDistance = distance;
+closestColor = color;
+}
+});return closestColor.name;
+}
+function rgbToHex(r, g, b) {
+return '#' + [r, g, b].map(x => {
+const hex = x.toString(16);
+return hex.length === 1 ? '0' + hex : hex;
+}).join('');
+}
+function showColorInfo(r, g, b) {
+const colorName = getColorName(r, g, b);
+const hex = rgbToHex(r, g, b);
+// Update color bar
+const colorBar = colorPopup.querySelector('.color-bar');
+colorBar.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+// Update color info
+const colorInfo = colorPopup.querySelector('.color-info');
+colorInfo.innerHTML = `
+<p>สี: ${colorName}</p>
+<p>RGB: (${r}, ${g}, ${b})</p>
+<p>HEX: ${hex}</p>
+`;
+colorPopup.style.display = 'block';
+showColorBlindSimulation(r, g, b);
+// Add to history
+addToHistory(r, g, b, colorName);
+// Show simulator if it was hidden
+simulator.style.display = 'block';
+colorHistoryElement.style.display = 'none';
+if (simulator.classList.contains('collapsed')) {
+simulator.classList.remove('collapsed');
+}
+}
+// Color blind simulation
+function simulateColorBlindness(r, g, b, type) {
+const matrices = {
+protanopia: [
+[0.567, 0.433, 0],
+[0.558, 0.442, 0],
+[0, 0.242, 0.758]
+],
+deuteranopia: [
+[0.625, 0.375, 0],
+[0.7, 0.3, 0],
+[0, 0.3, 0.7]
+],
+tritanopia: [[0.95, 0.05, 0],
+[0, 0.433, 0.567],
+[0, 0.475, 0.525]
+]
+};
+const matrix = matrices[type];
+const simulated = [
+Math.round(r * matrix[0][0] + g * matrix[0][1] + b * matrix[0][2]),
+Math.round(r * matrix[1][0] + g * matrix[1][1] + b * matrix[1][2]),
+Math.round(r * matrix[2][0] + g * matrix[2][1] + b * matrix[2][2])
+];
+return simulated;
+}
+function showColorBlindSimulation(r, g, b) {
+simulator.style.display = 'block';
+['protanopia', 'deuteranopia', 'tritanopia'].forEach(type => {
+const canvas = document.getElementById(type);
+canvas.width = 100;
+canvas.height = 100;
+const ctx = canvas.getContext('2d');
+const simulated = simulateColorBlindness(r, g, b, type);
+ctx.fillStyle = `rgb(${simulated[0]}, ${simulated[1]}, ${simulated[2]})`;
+ctx.fillRect(0, 0, 100, 100);
+});
+}
+// Click handlers for color detection
+[video, imageElement].forEach(element => {
+element.addEventListener('click', function(e) {
+const canvas = document.createElement('canvas');
+const context = canvas.getContext('2d');
+const source = this === video ? video : imageElement;
+canvas.width = source.videoWidth || source.naturalWidth;
+canvas.height = source.videoHeight || source.naturalHeight;
+context.drawImage(source, 0, 0);
+const rect = source.getBoundingClientRect();
+const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+const pixel = context.getImageData(x, y, 1, 1).data;
+showColorInfo(pixel[0], pixel[1], pixel[2]);
+});
+});
+// Capture button handling
+captureBtn.addEventListener('click', () => {const canvas = document.createElement('canvas');
+canvas.width = video.videoWidth;
+canvas.height = video.videoHeight;
+canvas.getContext('2d').drawImage(video, 0, 0);
+imageElement.src = canvas.toDataURL('image/png');
+video.style.display = 'none';
+imageElement.style.display = 'block';
+captureBtn.style.display = 'none';
+// Stop camera stream
+const stream = video.srcObject;
+if (stream) {
+stream.getTracks().forEach(track => track.stop());
+}
+});
+// History button handling
+document.getElementById('historyBtn').addEventListener('click', () => {
+colorHistoryElement.style.display =
+colorHistoryElement.style.display === 'none' || colorHistoryElement.style.display === ''
+? 'block'
+: 'none';
+simulator.style.display = 'none';
+updateHistoryDisplay();
+});
+// Handle clicks outside of popup areas
+document.addEventListener('click', (e) => {
+if (!e.target.closest('#colorPopup') &&
+!e.target.closest('#colorBlindSimulator') &&
+!e.target.closest('#colorHistory') &&
+!e.target.closest('#videoElement') &&
+!e.target.closest('#imageElement') &&
+!e.target.closest('.nav-button')) {
+colorPopup.style.display = 'none';
+simulator.style.display = 'none';
+colorHistoryElement.style.display = 'none';
+}
+});
+</script>
+</body>
+</html>
